@@ -20,15 +20,15 @@ from typing import Dict, List, Tuple
 # ========== Configuration: Change to your file path. ==========
 # support .xlsx / .csv / .parquet
 TRAIN_PATHS = [
-    "E:/USA/AIRS/AIRS WEEK/WEEK10/Network_dataset_1.xlsx",            # Flow Class
-    "E:/USA/AIRS/AIRS WEEK/WEEK10/matched_columns_file_TII_B.xlsx",   # Flow Class
+    "E:/Network_dataset_1.xlsx",            # Flow Class
+    "E:/matched_columns_file_TII_B.xlsx",   # Flow Class
 ]
 VAL_PATHS = [
-    "E:/USA/AIRS/AIRS WEEK/WEEK10/Network_dataset_1.xlsx",
-    "E:/USA/AIRS/AIRS WEEK/WEEK10/matched_columns_file_TII_B.xlsx",
+    "E:/Network_dataset_1.xlsx",
+    "E:/matched_columns_file_TII_B.xlsx",
 ]
 TEST_PATHS = [
-    "E:/USA/AIRS/AIRS WEEK/WEEK10/VPN_email_classified.xlsx",         # Package-level（include Traffic_Type）
+    "E:/VPN_email_classified.xlsx",         # Package-level（include Traffic_Type）
 ]
 
 OUT_DIR = "./harmonized/scenario_b"
