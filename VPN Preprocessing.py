@@ -17,31 +17,31 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
-# ============== 配置区域 ==============
-in_path = "E:/USA/AIRS/AIRS WEEK/WEEK10/VPN_email_classified.xlsx"  # ← 改成你的文件路径
+# ============== Configuration Area ==============
+in_path = "E:/VPN_email_classified.xlsx"  # ← Change this to your file path.
 out_dir = "./processed/dataset2"
 os.makedirs(out_dir, exist_ok=True)
 
-# 列名映射（与你的数据表头一致）
+# Column Name Mapping
 COL_NO = "No."
 COL_TIME = "Time"
 COL_SRC = "Source"
 COL_DST = "Destination"
 COL_PROTO = "Protocol"
 COL_LEN = "Length"
-COL_INFO = "Info"           # 不参与特征
-COL_LABEL = "Traffic_Type"  # 标签列（如 Normal / Suspect）
+COL_INFO = "Info"           # Non-participating features
+COL_LABEL = "Traffic_Type"  # Tag Column
 
-# 流切分超时（秒）
+# Stream Segmentation Timeout (seconds)
 FLOW_TIMEOUT_S = 120.0
 
-# DL 序列参数
+# DL Sequence Parameters
 SEQ_LEN = 128
 MIN_PKTS_FOR_DL = 3
-DL_CHANNELS = ["Length", "delta_t", "direction"]  # 三通道：包长、间隔、方向
+DL_CHANNELS = ["Length", "delta_t", "direction"]  # Three Channels: Packet Length, Interval, Direction
 
-# 标签映射（大小写不敏感）
-# 默认：Normal/Benign -> 0，其他 -> 1
+# Tag mapping (case-insensitive)
+# Default: Normal/Benign -> 0, Others -> 1
 def encode_label(v: str) -> int:
     if v is None:
         return 1
@@ -51,11 +51,11 @@ def encode_label(v: str) -> int:
     return 1
 
 
-# ============== 工具函数 ==============
+# ============== Utility Functions ==============
 def canonical_pair(src: str, dst: str) -> Tuple[str, str, int]:
     """
-    把 (src, dst) 变成无向对：按字典序排序，返回 (a, b, sign)
-    sign = +1 表示原始方向 src==a (正向)，-1 表示原始方向为反向
+    Convert the directed pair (src, dst) into an undirected pair: sort lexicographically and return (a, b, sign).
+    sign = +1 indicates the original direction was src==a (forward); -1 indicates the original direction was reversed.
     """
     a, b = sorted([str(src), str(dst)])
     sign = +1 if str(src) == a else -1
@@ -64,8 +64,8 @@ def canonical_pair(src: str, dst: str) -> Tuple[str, str, int]:
 
 def build_flow_ids(df: pd.DataFrame) -> pd.DataFrame:
     """
-    依据 (canonical {Source,Destination} + Protocol) + 超时 切分 flow_id
-    要求 df 已按 key 和时间升序排序
+    Split `flow_id` based on the tuple (canonical {Source, Destination} + Protocol) + Timeout.
+    Requirement: The DataFrame (`df`) must already be sorted in ascending order by key and timestamp.
     """
     flow_ids = []
     last_time_by_key: Dict[Tuple[str, str, str], float] = {}
@@ -77,7 +77,7 @@ def build_flow_ids(df: pd.DataFrame) -> pd.DataFrame:
         if key not in last_time_by_key:
             last_time_by_key[key] = t
             flow_index_by_key[key] = 0
-        # 超时 -> 新流
+        # Timeout -> New Stream
         if t - last_time_by_key[key] > FLOW_TIMEOUT_S:
             flow_index_by_key[key] += 1
         last_time_by_key[key] = t
@@ -86,22 +86,22 @@ def build_flow_ids(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# ============== 读入与基础加工 ==============
+# ============== Input and Basic Processing ==============
 print("[Dataset2] Loading Excel …")
 df = pd.read_excel(in_path)
 
-# 基本字段检查
+# Basic Field Validation
 required_cols = [COL_TIME, COL_SRC, COL_DST, COL_PROTO, COL_LEN, COL_LABEL]
 missing = [c for c in required_cols if c not in df.columns]
 if missing:
     raise ValueError(f"Missing required columns: {missing}")
 
-# 时间转秒（已是相对时间，直接 float）
+# Time Conversion to Seconds (Already Relative Time; Direct Float)
 df["_time_s"] = pd.to_numeric(df[COL_TIME], errors="coerce").astype(float).fillna(0.0)
-# 包长
+# Packet length
 df["_len"] = pd.to_numeric(df[COL_LEN], errors="coerce").astype(float).fillna(0.0)
 
-# 无向对 + 方向
+# Undirected Pair + Direction
 src_can, dst_can, sign_list = [], [], []
 for src, dst in zip(df[COL_SRC].astype(str), df[COL_DST].astype(str)):
     a, b, s = canonical_pair(src, dst)
@@ -110,17 +110,17 @@ df["_src_can"] = src_can
 df["_dst_can"] = dst_can
 df["_dir_sign"] = np.array(sign_list, dtype=float)
 
-# 排序并切分 flow
+# Sort and Split flow
 df = df.sort_values(by=["_src_can", "_dst_can", COL_PROTO, "_time_s"], kind="mergesort").reset_index(drop=True)
 df = build_flow_ids(df)
 
-# 计算 Δt（同 flow 内）
+# Calculate Δt (within the same flow)
 df["delta_t"] = df.groupby("flow_id")["_time_s"].diff().fillna(0.0)
 
-# 统一标签二值化
+# Unified Label Binarization
 df["_y"] = df[COL_LABEL].apply(encode_label).astype(int)
 
-# ============== ML：生成流级统计特征 ==============
+# ============== ML: Generate stream-level statistical features ==============
 print("[Dataset2] Building flow-level features for ML …")
 grp = df.groupby("flow_id")
 len_mean = grp["_len"].mean()
@@ -134,15 +134,15 @@ iat_max  = grp["delta_t"].max()
 pkt_cnt  = grp.size()
 bytes_total = grp["_len"].sum()
 
-# 流持续时间
+# Flow Duration
 t_start = grp["_time_s"].min()
 t_end   = grp["_time_s"].max()
 duration = t_end - t_start
 
-# 正/反向包比例（基于无向对里的 sign）
+# Forward/Reverse Packet Ratio (based on the sign within undirected pairs)
 pos_ratio = grp["_dir_sign"].apply(lambda s: (s > 0).mean() if len(s) else 0.5)
 
-# 多数表决标签
+# Majority Vote Tag
 y_flow = grp["_y"].agg(lambda x: x.value_counts().index[0])
 
 flows_df = pd.DataFrame({
@@ -162,7 +162,7 @@ flows_df = pd.DataFrame({
     "y": y_flow.values
 })
 
-# 选择 ML 特征列
+# Select ML Feature Columns
 ml_feature_cols = [
     "pkt_cnt","bytes_total","len_mean","len_std","len_min","len_max",
     "iat_mean","iat_std","iat_min","iat_max","duration","dir_ratio_pos"
@@ -171,7 +171,7 @@ ml_feature_cols = [
 X_ml = flows_df[ml_feature_cols].astype(float)
 y_ml = flows_df["y"].astype(int).to_numpy()
 
-# 标准化 & 切分
+# Standardization & Segmentation
 scaler = StandardScaler()
 X_ml_scaled = scaler.fit_transform(X_ml)
 
@@ -185,7 +185,7 @@ X_va, X_te, y_va, y_te = train_test_split(
     X_tmp, y_tmp, test_size=0.50, random_state=42, stratify=y_tmp
 )
 
-# 保存 ML .npz
+# save ML .npz
 np.savez_compressed(
     os.path.join(out_dir, "ml_arrays.npz"),
     X_train=X_tr, y_train=y_tr,
@@ -194,12 +194,12 @@ np.savez_compressed(
     feature_names=np.array(ml_feature_cols)
 )
 
-# 另存 ML .xlsx（便于查看）
+# save ML .xlsx
 pd.DataFrame(X_tr, columns=ml_feature_cols).assign(label=y_tr).to_excel(os.path.join(out_dir, "train.xlsx"), index=False)
 pd.DataFrame(X_va, columns=ml_feature_cols).assign(label=y_va).to_excel(os.path.join(out_dir, "val.xlsx"), index=False)
 pd.DataFrame(X_te, columns=ml_feature_cols).assign(label=y_te).to_excel(os.path.join(out_dir, "test.xlsx"), index=False)
 
-# ============== DL：构造固定长度序列（Length, delta_t, direction） ==============
+# ============== DL：Constructing Fixed-Length Sequences（Length, delta_t, direction） ==============
 print("[Dataset2] Building sequences for DL (1D-CNN/LSTM) …")
 X_seq_list: List[np.ndarray] = []
 y_seq_list: List[int] = []
@@ -212,10 +212,10 @@ for fid, g in df.sort_values(["flow_id","_time_s"]).groupby("flow_id"):
     arr_dt  = g["delta_t"].to_numpy(dtype=float)
     arr_dir = g["_dir_sign"].to_numpy(dtype=float)
 
-    # 组装 [T, C]
+    # Assembly [T, C]
     seq = np.stack([arr_len, arr_dt, arr_dir], axis=1)  # [T, 3]
 
-    # 截断/填充至 SEQ_LEN
+    # Truncate/Pad to SEQ_LEN
     T = seq.shape[0]
     if T >= SEQ_LEN:
         seq_fixed = seq[:SEQ_LEN]
@@ -231,7 +231,7 @@ if len(X_seq_list) > 0:
     X_seq = np.stack(X_seq_list, axis=0)  # [N, L, C]
     y_seq = np.array(y_seq_list, dtype=int)
 
-    # 切分
+    # Segmentation
     strat = y_seq if len(np.unique(y_seq)) > 1 else None
     Xtr, Xtmp, ytr, ytmp = train_test_split(
         X_seq, y_seq, test_size=0.30, random_state=42, stratify=strat
@@ -241,7 +241,7 @@ if len(X_seq_list) > 0:
         Xtr, ytr, test_size=0.50, random_state=42, stratify=strat2
     )
 
-    # 保存 DL .npz
+    # save DL .npz
     np.savez_compressed(
         os.path.join(out_dir, "dl_arrays_seq.npz"),
         X_train_seq=Xtr, y_train=ytr,
