@@ -10,7 +10,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, roc_auc_score
 
 # ========= Paths and Hyperparameters =========
-NPZ_PATH = "E:/USA/AIRS/AIRS WEEK/WEEK10/cnn_images/ds1/images.npz"   # ← If the path differs, modify it here.
+NPZ_PATH = "E:/cnn_images/ds1/images.npz"   # ← If the path differs, modify it here.
 OUT_DIR  = "./cnn_images/ds1/artifacts"
 os.makedirs(OUT_DIR, exist_ok=True)
 
@@ -177,7 +177,7 @@ from sklearn.metrics import accuracy_score, precision_recall_fscore_support, roc
 from torch import nn
 from torch.utils.data import TensorDataset, DataLoader
 
-IN_PATH = "E:/USA/AIRS/AIRS WEEK/WEEK10/cnn_images/ds2/images.npz"
+IN_PATH = "E:/cnn_images/ds2/images.npz"
 OUT_DIR  = "./cnn_images/ds2/artifacts"
 os.makedirs(OUT_DIR, exist_ok=True)
 
