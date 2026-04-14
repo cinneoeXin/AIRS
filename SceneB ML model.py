@@ -13,38 +13,38 @@ import matplotlib.pyplot as plt
 import tracemalloc
 import gc
 
-# ========== 路径配置 ==========
-train_val_path = "E:/USA/AIRS/AIRS WEEK/WEEK10/matched_columns_file_BCCC_B.xlsx"
-test_path = "E:/USA/AIRS/AIRS WEEK/WEEK10/Network_dataset_1.xlsx"
+# ========== Path Configuration ==========
+train_val_path = "E:/matched_columns_file_BCCC_B.xlsx"
+test_path = "E:/Network_dataset_1.xlsx"
 
-# ========== 特征交集 ==========
+# ========== Feature Intersection ==========
 common_features = ['src_port', 'dst_port', 'duration']
 
-# ========== 训练集 ==========
+# ========== Training Set ==========
 df_tr = pd.read_excel(train_val_path)
-# 标签二值化，比如 Non-Encrypted=0，其它=1；或你自定义分法
-df_tr['label_bin'] = (df_tr['label'] != 'Non-Encrypted').astype(int)  # 自行按你任务调整
+# Label binarization—for example, Non-Encrypted = 0 and all others = 1—or a custom classification scheme of your choice.
+df_tr['label_bin'] = (df_tr['label'] != 'Non-Encrypted').astype(int)  # Adjust independently based on the task.
 features_tr = df_tr[common_features]
 labels_tr = df_tr['label_bin']
 
-# ========== 测试集 ==========
+# ========== Training Set ==========
 df_te = pd.read_excel(test_path)
-# 这里type字段需你根据实际任务自定义二分类映射
-df_te['type_bin'] = (df_te['type'] != 'normal').astype(int)  # 正常流量为0，其它为1
+# Here, the `type` field requires custom mapping for binary classification based on the specific task.
+df_te['type_bin'] = (df_te['type'] != 'normal').astype(int)  # Normal traffic is 0; anything else is 1.
 features_te = df_te[common_features]
 labels_te = df_te['type_bin']
 
-# ========== 标准化 ==========
+# ========== standardization ==========
 scaler = StandardScaler()
 features_tr_scaled = scaler.fit_transform(features_tr)
 features_te_scaled = scaler.transform(features_te)
 
-# ========== 训练集划分 ==========
+# ========== Training Set Splitting ==========
 X_train, X_val, y_train, y_val = train_test_split(
     features_tr_scaled, labels_tr, test_size=0.15, random_state=42, stratify=labels_tr
 )
 
-# ========== 模型 ==========
+# ========== model ==========
 models = {
     "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42),
     "Decision Tree": DecisionTreeClassifier(random_state=42),
@@ -66,7 +66,7 @@ for name, model in models.items():
     current, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
 
-    # 推理延迟测量（单样本平均，前100个样本）
+    # Inference Latency Measurement (Single-Sample Average, First 100 Samples)
     inference_times = []
     for i in range(min(100, features_te_scaled.shape[0])):
         t0 = time()
@@ -96,7 +96,7 @@ for name, model in models.items():
 
     results[name] = [acc, prec, rec, f1, rocauc, train_time, infer_latency, peak_mem]
 
-# ========== 结果可视化 ==========
+# ========== Results Visualization ==========
 results_df = pd.DataFrame(results, index=bar_metrics)
 print(results_df)
 
@@ -111,7 +111,7 @@ for idx, metric in enumerate(bar_metrics[:5]):
 plt.tight_layout()
 plt.show()
 
-# 计算/资源类指标
+# Compute/Resource Metrics
 plt.figure(figsize=(12, 4))
 for idx, metric in enumerate(bar_metrics[5:]):
     plt.subplot(1, 3, idx+1)
