@@ -16,10 +16,10 @@ import tracemalloc
 import gc
 
 # 1. Data Loading
-DATA_PATH = r"E:\USA\AIRS\AIRS WEEK\WEEK10\matched_columns_file_TII_B.xlsx"
+DATA_PATH = r"E:\matched_columns_file_TII_B.xlsx"
 df = pd.read_excel(DATA_PATH)
 
-# 2. Label Binarization Encoding：Benign->0, 其它->1
+# 2. Label Binarization Encoding：Benign->0, other->1
 df['Label_bin'] = (df['Label'] != 'Benign').astype(int)
 
 # 3. Only retain numeric feature columns (automatically remove string columns, such as Timestamp/Label）
