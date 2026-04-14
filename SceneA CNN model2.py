@@ -9,8 +9,8 @@ from torch.utils.data import Dataset, DataLoader, Subset
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, roc_auc_score
 
-# ========= 路径与超参 =========
-NPZ_PATH = "E:/USA/AIRS/AIRS WEEK/WEEK10/cnn_images/ds1/images.npz"   # ← 若路径不同，改这里
+# ========= Paths and Hyperparameters =========
+NPZ_PATH = "E:/USA/AIRS/AIRS WEEK/WEEK10/cnn_images/ds1/images.npz"   # ← If the path differs, modify it here.
 OUT_DIR  = "./cnn_images/ds1/artifacts"
 os.makedirs(OUT_DIR, exist_ok=True)
 
@@ -20,14 +20,14 @@ EPOCHS = 30
 LR = 1e-3
 WEIGHT_DECAY = 1e-4
 
-# ========= 随机种子 & 设备 =========
+# ========= Random Seed & Device =========
 def set_seed(s=42):
     random.seed(s); np.random.seed(s)
     torch.manual_seed(s); torch.cuda.manual_seed_all(s)
 set_seed(SEED)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# ========= 数据集 =========
+# ========= Dataset =========
 class NpzImageDataset(Dataset):
     def __init__(self, X, y):
         # X: N×k×k×1
@@ -36,7 +36,7 @@ class NpzImageDataset(Dataset):
     def __len__(self): return self.X.size(0)
     def __getitem__(self, idx): return self.X[idx], self.y[idx]
 
-# ========= 模型 =========
+# ========= model =========
 class SmallCNN(nn.Module):
     def __init__(self, num_classes: int):
         super().__init__()
@@ -55,7 +55,7 @@ class SmallCNN(nn.Module):
         x = self.classifier(x)
         return x
 
-# ========= 载入数据 =========
+# ========= Loading Data =========
 data = np.load(NPZ_PATH, allow_pickle=True)
 X = data["X_images"]     # N×k×k×1
 y = data["y"]
@@ -63,7 +63,7 @@ y = data["y"]
 num_classes = int(len(np.unique(y)))
 dataset = NpzImageDataset(X, y)
 
-# Stratified 划分 70/15/15
+# Stratified Division 70/15/15
 idx = np.arange(len(dataset))
 idx_train, idx_temp, y_train, y_temp = train_test_split(idx, y, test_size=0.30, random_state=SEED, stratify=y)
 idx_val, idx_test,  y_val,  y_test  = train_test_split(idx_temp, y_temp, test_size=0.50, random_state=SEED, stratify=y_temp)
@@ -76,13 +76,13 @@ train_loader = DataLoader(ds_train, batch_size=BATCH_SIZE, shuffle=True, drop_la
 val_loader   = DataLoader(ds_val,   batch_size=BATCH_SIZE, shuffle=False, drop_last=False)
 test_loader  = DataLoader(ds_test,  batch_size=BATCH_SIZE, shuffle=False, drop_last=False)
 
-# 类权重（对不平衡有帮助）
+# Class Weights (Helpful for Imbalanced Data)
 class_counts = np.bincount(y_train, minlength=num_classes)
 class_weights = (class_counts.sum() / (class_counts + 1e-12))
 class_weights = class_weights / class_weights.mean()
 class_weights_tensor = torch.tensor(class_weights, dtype=torch.float32, device=device)
 
-# ========= 训练要素 =========
+# ========= Training Elements =========
 model = SmallCNN(num_classes=num_classes).to(device)
 criterion = nn.CrossEntropyLoss(weight=class_weights_tensor if num_classes>1 else None)
 optimizer = optim.Adam(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
@@ -104,7 +104,7 @@ def evaluate(loader) -> Tuple[float,float,float,float,float]:
     prec, rec, f1, _ = precision_recall_fscore_support(y_true, y_pred, average="weighted", zero_division=0)
     try:
         if num_classes==2:
-            # 为 AUC，取正类概率
+            # For AUC, use the positive class probabilities.
             model.eval()
             all_prob = []
             with torch.no_grad():
@@ -120,7 +120,7 @@ def evaluate(loader) -> Tuple[float,float,float,float,float]:
         auc = float("nan")
     return acc, prec, rec, f1, auc
 
-# ========= 训练循环 =========
+# ========= Training Loop =========
 for epoch in range(1, EPOCHS+1):
     model.train()
     running = 0.0
@@ -137,13 +137,13 @@ for epoch in range(1, EPOCHS+1):
         best_val_f1 = f1
         torch.save({"model":model.state_dict(),"num_classes":num_classes}, best_path)
 
-# ========= 测试集评估 =========
+# ========= Test Set Evaluation =========
 ckpt = torch.load(best_path, map_location=device)
 model.load_state_dict(ckpt["model"])
 
 test_acc, test_prec, test_rec, test_f1, test_auc = evaluate(test_loader)
 
-# 推理时延（每样本毫秒）
+# Inference Latency (ms per sample）
 model.eval()
 start = time.time()
 n = 0
@@ -155,7 +155,7 @@ with torch.no_grad():
 elapsed = time.time() - start
 latency_ms = (elapsed / max(n,1)) * 1000.0
 
-# ========= 输出 =========
+# ========= output =========
 with open(os.path.join(OUT_DIR,"metrics.txt"), "w") as f:
     f.write(f"test_acc={test_acc:.6f}\n")
     f.write(f"test_prec={test_prec:.6f}\n")
@@ -170,7 +170,7 @@ print(f"[TEST] acc={test_acc:.4f} prec={test_prec:.4f} rec={test_rec:.4f} f1={te
 
 #Dataset2 VPN
 # -*- coding: utf-8 -*-
-# 同 DS1，只改路径与 dataset 名称
+# Same as DS1; only the path and dataset name have been changed.
 import os, json, time, psutil, numpy as np, torch, matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, roc_auc_score, confusion_matrix, roc_curve
@@ -190,8 +190,8 @@ def rss_mb():
 
 def ensure_nchw(X):
     """
-    将任意常见格式的图像张量变为 NCHW，并返回 (X_nchw, C, H, W)
-    支持:
+    Converts an image tensor of any common format to NCHW format and returns it (X_nchw, C, H, W)
+    support:
       - (N, H, W)           -> (N, 1, H, W)
       - (N, H, W, C)       -> (N, C, H, W)
       - (N, C, H, W)       -> 原样
@@ -200,13 +200,13 @@ def ensure_nchw(X):
         N, H, W = X.shape
         X = X.reshape(N, 1, H, W)
     elif X.ndim == 4:
-        # 判断通道位置：如果最后一维很小（<=8），一般是 NHWC
+        # Determining Channel Position: If the last dimension is very small (<= 8), it is generally NHWC.
         N, a, b, c = X.shape
-        # 可能是 NHWC
+        # It might be NHWC.
         if c <= 8 and a == b:
             X = np.transpose(X, (0, 3, 1, 2))  # NHWC -> NCHW
-        # 如果是 NCHW（第二维较小，后两维方阵），保持不动
-        # 如果写入时使用了单通道但没留最后一维，也会被上面的 ndim==3 分支处理
+        # If it's an NCHW (smaller second dimension, square matrix of the last two dimensions), keep it unchanged.
+        # If a single channel is used during writing but the last dimension is not retained, it will also be processed by the `ndim==3` branch mentioned above.
     else:
         raise ValueError(f"Unsupported image array shape: {X.shape}")
     return X, X.shape[1], X.shape[2], X.shape[3]  # N, C, H, W
@@ -233,13 +233,13 @@ def to_torch(X_nchw, y, device):
 
 # ------------------ Load ------------------
 data = np.load(IN_PATH)
-X_raw = data["X_images"]  # 可能是 (N,H,W) / (N,H,W,C) / (N,C,H,W)
+X_raw = data["X_images"]  # It might be (N,H,W) / (N,H,W,C) / (N,C,H,W)
 y     = data["y"]
 
-# 转成 NCHW，并拿到真实通道数
+# Convert to NCHW and retrieve the actual number of channels.
 X_nchw, C, H, W = ensure_nchw(X_raw)
 
-# 划分
+# divide
 X_train, X_temp, y_train, y_temp = train_test_split(X_nchw, y, test_size=0.30, random_state=42, stratify=y)
 X_val,   X_test, y_val, y_test   = train_test_split(X_temp,  y_temp, test_size=0.50, random_state=42, stratify=y_temp)
 
@@ -252,14 +252,14 @@ train_loader = DataLoader(TensorDataset(Xtr, ytr), batch_size=64, shuffle=True)
 val_loader   = DataLoader(TensorDataset(Xva, yva), batch_size=256)
 test_loader  = DataLoader(TensorDataset(Xte, yte), batch_size=256)
 
-# 类别权重（缓解不平衡）
+# Class Weights (Mitigating Imbalance)
 classes, counts = np.unique(y_train, return_counts=True)
 n_classes = int(classes.max() + 1)
 weights = torch.ones(n_classes, device=device)
 weights[classes] = torch.tensor((counts.max()/counts), dtype=torch.float32, device=device)
 criterion = nn.CrossEntropyLoss(weight=weights)
 
-# 模型的 in_ch 自动等于真实通道数 C
+# The model's `in_ch` automatically equals the actual number of channels, C.
 model = SmallCNN(in_ch=C, n_classes=n_classes).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
@@ -279,7 +279,7 @@ for epoch in range(20):
         loss.backward()
         optimizer.step()
 
-    # 验证
+    # verify
     model.eval()
     val_loss = 0.0
     with torch.no_grad():
@@ -300,7 +300,7 @@ train_time = time.perf_counter() - t0
 rss_after = rss_mb()
 gpu_peak_mb = torch.cuda.max_memory_allocated()/(1024**2) if device.type == "cuda" else None
 
-# 恢复最佳并保存
+# Restore to Best and Save
 model.load_state_dict(best_state)
 os.makedirs(OUT_DIR, exist_ok=True)
 torch.save(model.state_dict(), os.path.join(OUT_DIR, "best_model.pt"))
@@ -313,7 +313,7 @@ with torch.no_grad():
     for xb, yb in test_loader:
         lg = model(xb)
         pr = torch.argmax(lg, dim=1).detach().cpu().numpy()
-        # 对二分类，取第1类的概率；多分类时下行可按需改为 softmax 全量输出
+        # For binary classification, this returns the probability of the first class; for multi-class classification, the subsequent line can be modified as needed to output the full softmax distribution.
         pb = torch.softmax(lg, dim=1)[:, min(1, n_classes-1)].detach().cpu().numpy()
         probs.append(pb); preds.append(pr); labels.append(yb.detach().cpu().numpy())
 inference_time = time.perf_counter() - t1
