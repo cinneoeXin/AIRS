@@ -4,14 +4,14 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
-in_path = "E:/USA/AIRS/AIRS WEEK/WEEK10/Network_dataset_1.xlsx"       # ← 改成你的全量文件路径
+in_path = ""       # ← Replace this with your full file path.
 out_dir = "./processed/dataset1_full"
 os.makedirs(out_dir, exist_ok=True)
 
-# 读取整份 Excel（如果本机内存小，可先转 CSV 再用 pandas.read_csv(chunksize=...) 分批处理）
-df = pd.read_excel(in_path)  # 全量读取
+# Read the entire Excel file (if local memory is limited, you can first convert it to CSV and then process it in chunks using `pandas.read_csv(chunksize=...)`).
+df = pd.read_excel(in_path)  # Full Read
 
-# 标签：normal=0, 其他=1
+# Tags: Normal=0, Other=1
 df["label"] = df["type"].apply(lambda x: 0 if str(x).lower()=="normal" else 1)
 
 non_features = [
