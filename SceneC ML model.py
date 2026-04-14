@@ -13,33 +13,33 @@ import matplotlib.pyplot as plt
 import tracemalloc
 import gc
 
-# ========== 文件路径 ==========
+# ========== File Path ==========
 path_bccc = r"E:\USA\AIRS\AIRS WEEK\WEEK10\matched_columns_file_BCCC_B.xlsx"
 path_tii  = r"E:\USA\AIRS\AIRS WEEK\WEEK10\matched_columns_file_TII_B.xlsx"
 path_net  = r"E:\USA\AIRS\AIRS WEEK\WEEK10\Network_dataset_1.xlsx"
 
-# ========== 读取数据 ==========
+# ========== reading data ==========
 df_bccc = pd.read_excel(path_bccc)
 df_tii  = pd.read_excel(path_tii)
 df_net  = pd.read_excel(path_net)
 
-# ========== 对齐字段名 ==========
+# ========== Align Field Names ==========
 df_bccc.rename(columns={'src_port':'src_port', 'dst_port':'dst_port', 'duration':'duration'}, inplace=True)
 df_tii.rename(columns={'Src Port':'src_port', 'Dst Port':'dst_port', 'Flow Duration':'duration'}, inplace=True)
 df_net.rename(columns={'src_port':'src_port', 'dst_port':'dst_port', 'duration':'duration'}, inplace=True)
 
-# ========== 只保留交集特征 ==========
+# ========== Retain only intersection features. ==========
 common_features = ['src_port', 'dst_port', 'duration']
 for col in common_features:
     for df in [df_bccc, df_tii, df_net]:
         df[col] = pd.to_numeric(df[col], errors='coerce')
 
-# ========== 标签标准化 ==========
+# ========== Tag Standardization ==========
 df_bccc['label_bin'] = (df_bccc['label'] != 'Non-Encrypted').astype(int)
 df_tii['label_bin']  = (df_tii['Label'] != 'Benign').astype(int)
 df_net['label_bin']  = (df_net['type'] != 'normal').astype(int)
 
-# ========== 合并数据 ==========
+# ========== Merge Data ==========
 features = pd.concat([
     df_bccc[common_features],
     df_tii[common_features],
@@ -52,26 +52,26 @@ labels = pd.concat([
     df_net['label_bin']
 ], axis=0, ignore_index=True)
 
-# ========== 数据分割 ==========
+# ========== Data Partitioning ==========
 X_train, X_temp, y_train, y_temp = train_test_split(
     features, labels, test_size=0.3, random_state=42, stratify=labels)
 X_test, X_val, y_test, y_val = train_test_split(
     X_temp, y_temp, test_size=0.5, random_state=42, stratify=y_temp)
 
-# ========== 标准化 ==========
+# ========== standardization ==========
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled  = scaler.transform(X_test)
-# X_val_scaled   = scaler.transform(X_val) # 可以注释掉，没用到
 
-# ========== 并行训练+加速SVM ==========
+
+# ========== Parallel Training + Acceleration SVM ==========
 models = {
     "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1),
     "Decision Tree": DecisionTreeClassifier(random_state=42),
-    # SVM用linear加速，适合特征数较少场景
+    # SVM, when accelerated using linear methods, is suitable for scenarios with a relatively small number of features.
     "SVM": SVC(kernel='linear', probability=True, random_state=42, max_iter=1000),
     "Logistic Regression": LogisticRegression(max_iter=200, random_state=42, n_jobs=-1),
-    "kNN": KNeighborsClassifier(n_neighbors=3, n_jobs=-1), # n_neighbors小些更快
+    "kNN": KNeighborsClassifier(n_neighbors=3, n_jobs=-1), # A smaller `n_neighbors` value is faster.
 }
 
 results = {}
@@ -88,7 +88,7 @@ for name, model in models.items():
     tracemalloc.stop()
 
     inference_times = []
-    for i in range(min(30, X_test_scaled.shape[0])):  # 只取30个测试样本计算推理延迟
+    for i in range(min(30, X_test_scaled.shape[0])):  # Only 30 test samples are used to calculate inference latency.
         t0 = time()
         _ = model.predict(X_test_scaled[i:i+1])
         inference_times.append((time() - t0) * 1000)
