@@ -17,43 +17,43 @@ import numpy as np
 import pandas as pd
 from typing import Dict, List, Tuple
 
-# ========== 配置：修改为你的文件路径 ==========
-# 支持 .xlsx / .csv / .parquet
+# ========== Configuration: Change to your file path. ==========
+# support .xlsx / .csv / .parquet
 TRAIN_PATHS = [
-    "E:/USA/AIRS/AIRS WEEK/WEEK10/Network_dataset_1.xlsx",            # 流级
-    "E:/USA/AIRS/AIRS WEEK/WEEK10/matched_columns_file_TII_B.xlsx",   # 流级
+    "E:/USA/AIRS/AIRS WEEK/WEEK10/Network_dataset_1.xlsx",            # Flow Class
+    "E:/USA/AIRS/AIRS WEEK/WEEK10/matched_columns_file_TII_B.xlsx",   # Flow Class
 ]
 VAL_PATHS = [
     "E:/USA/AIRS/AIRS WEEK/WEEK10/Network_dataset_1.xlsx",
     "E:/USA/AIRS/AIRS WEEK/WEEK10/matched_columns_file_TII_B.xlsx",
 ]
 TEST_PATHS = [
-    "E:/USA/AIRS/AIRS WEEK/WEEK10/VPN_email_classified.xlsx",         # 包级（含 Traffic_Type）
+    "E:/USA/AIRS/AIRS WEEK/WEEK10/VPN_email_classified.xlsx",         # Package-level（include Traffic_Type）
 ]
 
 OUT_DIR = "./harmonized/scenario_b"
-WRITE_PARQUET = True     # True: 写 parquet；False: 写 csv
+WRITE_PARQUET = True     # True: Write Parquet; False: Write CSV
 
-# ========== 标签识别设置 ==========
-# 针对你的三个数据集（按文件名不含扩展名）做显式映射
-# 若你的文件名不同，请把 key 改为你的实际 basename
+# ========== Tag Recognition Settings ==========
+# Perform explicit mapping for your three datasets (based on filenames, excluding extensions).
+# If your filename differs, please change the key to your actual basename.
 LABEL_MAP = {
     "VPN_email_classified": "traffic_type",          # Traffic_Type → traffic_type
     "Network_dataset_1": "type",                     # type → type
     "matched_columns_file_TII_B": "label",          # Label → label
 }
 
-# 扩展候选名（标准化前后都会尝试）
+# Expand Candidate Names (Attempted both before and after standardization)
 LABEL_CANDIDATES_RAW = [
     "label","Label","LABEL","y","Y","type","Type","Traffic_Type"
 ]
-# 智能关键字（标准化后匹配）
+# Smart Keywords (Matched after Standardization)
 LABEL_KEYWORDS_RE = re.compile(
     r"(label|class|attack|category|malicious|benign|target|type)$",
     re.I
 )
 
-# 明显的非特征列（出现即剔除） —— 注意为**标准化后**的名字
+# Obvious Non-Feature Columns (Discarded Upon Appearance) — Note: These refer to the names **after standardization**.
 NON_FEATURE_CANDS = {
     "ts","timestamp","time","flow_start_ts",
     "src","dst","src_ip","dst_ip","source","destination",
@@ -63,17 +63,17 @@ NON_FEATURE_CANDS = {
     "weird_name","weird_addl","info","no","_time_s"
 }
 
-# ========== 语义归一：规则与同义词 ==========
+# ========== Semantic Normalization: Rules and Synonyms ==========
 CANON_SYNONYMS: List[Tuple[str, str]] = [
     # duration
     (r"^(flow_)?duration$", "duration"),
     (r"^flow[_ ]?duration$", "duration"),
 
-    # 方向段大小（保留原名）
+    # Directory Entry Size (Retain Original Name)
     (r"^(fwd_)?segment_size_avg$", "fwd_segment_size_avg"),
     (r"^bwd[_ ]?segment_size_avg$", "bwd_segment_size_avg"),
 
-    # 包长/字节统计 → pkt_size_*
+    # Packet Length / Byte Statistics → pkt_size_*
     (r"^(len|length|bytes)_(mean)$", "pkt_size_mean"),
     (r"^(len|length|bytes)_(std)$", "pkt_size_std"),
     (r"^(len|length|bytes)_(min)$", "pkt_size_min"),
@@ -90,7 +90,7 @@ CANON_SYNONYMS: List[Tuple[str, str]] = [
     (r"^(bytes_total|total_bytes)$", "bytes_total"),
     (r"^(pkt_cnt|packet_count|packets)$", "packet_count"),
 
-    # active/idle 区间统计
+    # active/idle Interval Statistics
     (r"^active_(mean)$", "active_mean"),
     (r"^active_(std)$",  "active_std"),
     (r"^active_(min)$",  "active_min"),
@@ -100,15 +100,15 @@ CANON_SYNONYMS: List[Tuple[str, str]] = [
     (r"^idle_(min)$",    "idle_min"),
     (r"^idle_(max)$",    "idle_max"),
 
-    # 端口/协议
+    # Port/Protocol
     (r"^(src[_ ]?port)$", "src_port"),
     (r"^(dst[_ ]?port)$", "dst_port"),
     (r"^(protocol|proto)$", "protocol"),
 ]
 
-# ========== 工具函数 ==========
+# ========== Utility Functions ==========
 def _strip_invisible(s: str) -> str:
-    # 去掉 BOM/零宽/不间断空格等
+    # Remove BOM, zero-width characters, non-breaking spaces, etc.
     return (
         s.replace("\u200b", "")
          .replace("\ufeff", "")
@@ -116,12 +116,12 @@ def _strip_invisible(s: str) -> str:
     )
 
 def normalize_name(name: str) -> str:
-    # 标准化列名：去不可见字符、小写、空白/连字符/点→下划线、去多余下划线
+    # Standardize Column Names: Remove invisible characters; convert to lowercase; replace spaces, hyphens, and periods with underscores; and remove redundant underscores.
     s = _strip_invisible(str(name))
     s = s.strip().lower()
     s = re.sub(r"[ \t\.\-\/]+", "_", s)
     s = re.sub(r"_+", "_", s)
-    s = re.sub(r"[^a-z0-9_]", "", s)  # 保守：移除奇异符号
+    s = re.sub(r"[^a-z0-9_]", "", s)  # Conservative: Remove Strange Symbols
     return s
 
 def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -137,7 +137,7 @@ def looks_like_label(s: pd.Series) -> bool:
     nuniq = s.nunique(dropna=True)
     if nuniq == 0:
         return False
-    # 类别较少更像标签（阈值可调）
+    # Fewer categories; functions more like tags (adjustable threshold).
     if nuniq <= 20:
         if (pd.api.types.is_categorical_dtype(s) or
             pd.api.types.is_string_dtype(s) or
@@ -147,41 +147,41 @@ def looks_like_label(s: pd.Series) -> bool:
 
 def detect_label_col(df: pd.DataFrame, name: str|None=None) -> str:
     """
-    标签列识别优先级：
-    1) 显式映射 LABEL_MAP[name]
-    2) 候选名（标准化）
-    3) 关键字命中 + 形态判断
-    4) 全表兜底：挑一个“像标签”的列
+    Label Column Identification Priority:
+    1) Explicit Mapping: `LABEL_MAP[name]`
+    2) Candidate Names (Normalized)
+    3) Keyword Match + Structural Heuristics
+    4) Table-wide Fallback: Select a column that "looks like a label"
     """
     df_norm = normalize_columns(df)
     cols = list(df_norm.columns)
 
-    # 1) 显式映射
+    # 1) Explicit Mapping
     if name and name in LABEL_MAP:
         mapped = LABEL_MAP[name]
         if mapped in cols:
             return mapped
         else:
-            # 诊断信息
+            # Diagnostic Information
             raise ValueError(
-                f"[{name}] 显式映射指定的标签列 '{mapped}' 未找到。"
-                f"\n现有（标准化后）列名(最多50): {cols[:50]}"
+                f"[{name}] Explicitly map the specified label column '{mapped}' not found"
+                f"\nExisting (Standardized) Column Names (Max 50): {cols[:50]}"
             )
 
-    # 2) 候选名（原始候选做标准化后再匹配）
+    # 2) Candidate Name (Original candidates are standardized prior to matching)
     candidates_norm = [normalize_name(c) for c in LABEL_CANDIDATES_RAW]
     for c in candidates_norm:
         if c in cols:
             return c
 
-    # 3) 关键字 + 形态判断
+    # 3) Keywords + Pattern Recognition
     kw_hits = [c for c in cols if LABEL_KEYWORDS_RE.search(c)]
     kw_hits = [c for c in kw_hits if looks_like_label(df_norm[c])]
     if kw_hits:
         kw_hits.sort(key=lambda c: df_norm[c].nunique(dropna=True))
         return kw_hits[0]
 
-    # 4) 全表兜底
+    # 4) Full-Table Catch-all
     cands = [c for c in cols if looks_like_label(df_norm[c])]
     if cands:
         cands.sort(key=lambda c: df_norm[c].nunique(dropna=True))
@@ -204,31 +204,31 @@ def load_any(path: str) -> pd.DataFrame:
     else:
         raise ValueError(f"Unsupported file type: {ext}")
 
-# ========== 核心处理 ==========
+# ========== Core Processing ==========
 def harmonize_one(path: str, name: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
-    返回 (df_canon, colmap)
-    - df_canon：规范列名的表（仅数值特征 + label），尚未裁剪到交集
-    - colmap：原始 -> 标准化 -> 规范 的字段映射
+    Returns (df_canon, colmap)
+    - df_canon: Table with standardized column names (numerical features + label only), not yet trimmed to the intersection.
+    - colmap: Field mapping: Original -> Standardized -> Canonical.
     """
     raw = load_any(path)
     raw_cols = list(raw.columns)
 
-    # 标准化列名
+    # Standardize Column Names
     df = normalize_columns(raw)
     norm_cols = list(df.columns)
 
-    # 识别标签列（传入文件名作为数据集名）
+    # Identify Label Column (Pass filename as dataset name)
     label_col_norm = detect_label_col(df, name=name)
 
-    # 保存诊断：原始标签列名字
+    # Save Diagnostic: Original Label Column Name
     try:
         idx = norm_cols.index(label_col_norm)
         original_label = raw_cols[idx]
     except Exception:
         original_label = label_col_norm  # 兜底
 
-    # 应用同义词映射 + 标签列标准化名为 'label'
+    # Apply synonym mapping + standardize the label column name to 'label'
     mapped_cols = []
     for c in df.columns:
         if c == label_col_norm:
@@ -237,7 +237,7 @@ def harmonize_one(path: str, name: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
             mapped_cols.append(apply_synonyms(c))
     df.columns = mapped_cols
 
-    # 生成可选派生列
+    # Generate Optional Derived Columns
     if set(["subflow_fwd_packets","subflow_bwd_packets"]).issubset(df.columns):
         df["packet_count"] = (
             pd.to_numeric(df["subflow_fwd_packets"], errors="coerce").fillna(0)
@@ -250,15 +250,15 @@ def harmonize_one(path: str, name: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
             + pd.to_numeric(df["subflow_bwd_bytes"], errors="coerce").fillna(0)
         )
 
-    # 非特征列剔除（标准化后）
+    # Exclusion of Non-Feature Columns (After Standardization）
     drop_cands = set(NON_FEATURE_CANDS)
     feature_cols = [c for c in df.columns if c not in drop_cands and c != "label"]
 
-    # 仅保留数值型特征（其他强转为数值，失败→NaN→0）
+    # Retain only numerical features (force-convert others to numerical types; if conversion fails, set to NaN, then to 0).
     df_feat = df[feature_cols].apply(pd.to_numeric, errors="coerce").fillna(0.0)
     df_feat["label"] = df["label"].copy()
 
-    # 构建映射表：原始列 -> 标准化 -> 规范
+    # Construct Mapping Table: Original Column -> Standardization -> Normalization
     colmap = pd.DataFrame({
         "raw_column": raw_cols,
         "normalized": norm_cols,
@@ -283,7 +283,7 @@ def write_table(df: pd.DataFrame, path: str):
     else:
         df.to_csv(path, index=False)
 
-# ========== 主流程 ==========
+# ========== Main Process ==========
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
 
@@ -297,36 +297,36 @@ def main():
     }
     all_colmaps = []
 
-    # 逐表归一
+    # Consolidation Table by Table
     for role, path in all_paths:
         if not os.path.exists(path):
             raise FileNotFoundError(f"文件不存在: {path}")
-        name = os.path.splitext(os.path.basename(path))[0]  # 作为数据集名
+        name = os.path.splitext(os.path.basename(path))[0]  # As dataset name
         df_canon, colmap = harmonize_one(path, name)
         harmonized_by_role[role].append((name, df_canon, colmap))
         all_colmaps.append(colmap)
 
-    # 计算交集（train+val+test）
+    # Calculate Intersection（train+val+test）
     dfs_for_common = [d for role in harmonized_by_role for (_, d, _) in harmonized_by_role[role]]
     common_feats = intersect_features(dfs_for_common)
 
-    # 输出 common_features.txt
+    # output common_features.txt
     with open(os.path.join(OUT_DIR, "common_features.txt"), "w", encoding="utf-8") as f:
         for c in common_feats:
             f.write(c + "\n")
 
-    # 各数据集裁剪到交集并写出
+    # Crop each dataset to their intersection and write them out.
     for role in ["train","val","test"]:
         for name, df_can, _ in harmonized_by_role[role]:
             keep_cols = common_feats + ["label"]
-            # 交集可能为空，也允许导出（只含 label）；如需强制至少 N 个特征，可加断言
+            # The intersection may be empty, and exporting is permitted (containing only the label); if a minimum of N features is required, an assertion can be added.
             out = df_can[keep_cols].copy()
             out_path = os.path.join(
                 OUT_DIR, f"{name}_harmonized." + ("parquet" if WRITE_PARQUET else "csv")
             )
             write_table(out, out_path)
 
-    # 汇总字段映射
+    # Summary Field Mapping
     colmap_all = pd.concat(all_colmaps, ignore_index=True)
     colmap_all_path = os.path.join(OUT_DIR, "all_column_mappings.xlsx")
     colmap_all.to_excel(colmap_all_path, index=False)
