@@ -15,24 +15,24 @@ import matplotlib.pyplot as plt
 import tracemalloc
 import gc
 
-# 1. 数据加载
+# 1. Data Loading
 DATA_PATH = r"E:\USA\AIRS\AIRS WEEK\WEEK10\matched_columns_file_TII_B.xlsx"
 df = pd.read_excel(DATA_PATH)
 
-# 2. 标签二值化编码：Benign->0, 其它->1
+# 2. Label Binarization Encoding：Benign->0, 其它->1
 df['Label_bin'] = (df['Label'] != 'Benign').astype(int)
 
-# 3. 仅保留数值型特征列（自动去掉字符串列如Timestamp/Label）
+# 3. Only retain numeric feature columns (automatically remove string columns, such as Timestamp/Label）
 features = df.select_dtypes(include=[np.number])
 
-# 4. 获取标签
+# 4. Retrieve Tags
 labels = df['Label_bin']
 
-# 5. 标准化处理
+# 5. Standardized Processing
 scaler = StandardScaler()
 features_scaled = scaler.fit_transform(features)
 
-# 6. 数据集划分（7:1.5:1.5）
+# 6. Dataset Splitting（7:1.5:1.5）
 X_train, X_temp, y_train, y_temp = train_test_split(
     features_scaled, labels, test_size=0.3, random_state=42, stratify=labels)
 X_val, X_test, y_val, y_test = train_test_split(
@@ -42,7 +42,7 @@ X_tr, y_tr = X_train, y_train
 X_vali, y_vali = X_val, y_val
 X_te, y_te = X_test, y_test
 
-# 7. 定义模型
+# 7. Define Model
 models = {
     "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42),
     "Decision Tree": DecisionTreeClassifier(random_state=42),
@@ -64,7 +64,7 @@ for name, model in models.items():
     current, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
 
-    # 推理延迟测量（单样本平均，前100个样本）
+    # Inference Latency Measurement (Single-Sample Average, First 100 Samples)
     inference_times = []
     for i in range(min(100, X_te.shape[0])):
         t0 = time()
@@ -94,12 +94,12 @@ for name, model in models.items():
 
     results[name] = [acc, prec, rec, f1, rocauc, train_time, infer_latency, peak_mem]
 
-# 8. 结果可视化
+# 8. Results Visualization
 results_df = pd.DataFrame(results, index=bar_metrics)
 print(results_df)
 
 plt.figure(figsize=(14, 8))
-for idx, metric in enumerate(bar_metrics[:5]):  # 前五个是分类指标
+for idx, metric in enumerate(bar_metrics[:5]):  # The first five are classification metrics.
     plt.subplot(2, 3, idx+1)
     plt.bar(results_df.columns, results_df.loc[metric], color='steelblue')
     plt.title(metric)
@@ -109,7 +109,7 @@ for idx, metric in enumerate(bar_metrics[:5]):  # 前五个是分类指标
 plt.tight_layout()
 plt.show()
 
-# 计算/资源类指标
+# Compute/Resource Metrics
 plt.figure(figsize=(12, 4))
 for idx, metric in enumerate(bar_metrics[5:]):
     plt.subplot(1, 3, idx+1)
@@ -120,5 +120,5 @@ for idx, metric in enumerate(bar_metrics[5:]):
 plt.tight_layout()
 plt.show()
 
-# 9. 保存结果
+# 9. Save Results
 results_df.to_csv("traditional_ml_sceneA_results.csv")
