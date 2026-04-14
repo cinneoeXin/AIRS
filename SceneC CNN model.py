@@ -2,9 +2,9 @@
 """
 Scenario C (Scheme B): Multi-domain learning with feature derivation to expand common fields
 Datasets (Windows paths):
-- E:/USA/AIRS/AIRS WEEK/WEEK10/Network_dataset_1.xlsx      -> ds1
-- E:/USA/AIRS/AIRS WEEK/WEEK10/matched_columns_file_TII_B.xlsx -> ds3
-- E:/USA/AIRS/AIRS WEEK/WEEK10/matched_columns_file_BCCC_B.xlsx -> ds4
+- E:/Network_dataset_1.xlsx      -> ds1
+- E:/matched_columns_file_TII_B.xlsx -> ds3
+- E:/matched_columns_file_BCCC_B.xlsx -> ds4
 
 Pipeline:
 1) Harmonize + derive common flow features from XLSX.
@@ -28,15 +28,15 @@ from torch.utils.data import TensorDataset, DataLoader
 # =========================
 #        CONFIG
 # =========================
-# 原始 .xlsx（方案B直接使用 XLSX，不依赖 npz 一致性）
-DS1_XLSX = r"E:\USA\AIRS\AIRS WEEK\WEEK10\Network_dataset_1.xlsx"
-DS3_XLSX = r"E:\USA\AIRS\AIRS WEEK\WEEK10\matched_columns_file_TII_B.xlsx"
-DS4_XLSX = r"E:\USA\AIRS\AIRS WEEK\WEEK10\matched_columns_file_BCCC_B.xlsx"
+# Original .xlsx (Scenario B uses the XLSX directly, without relying on NPZ consistency)
+DS1_XLSX = r"E:\Network_dataset_1.xlsx"
+DS3_XLSX = r"E:\matched_columns_file_TII_B.xlsx"
+DS4_XLSX = r"E:\matched_columns_file_BCCC_B.xlsx"
 
-# 选择字段数（2、3、5 之一；不足时会“自动降级”）
+# # Number of selected fields (2, 3, or 5; automatically "downgraded" if insufficient)
 K = 5
 
-# 字段优先级（语义归一后的规范名）
+# Field priority (semantically unified canonical name)
 FEATURE_PRIORITY = [
     "duration","bytes_total","packet_count",
     "pkt_size_mean","pkt_size_std",
@@ -44,10 +44,10 @@ FEATURE_PRIORITY = [
     "active_mean","idle_mean"
 ]
 
-OUT_DIR = r"E:\USA\AIRS\AIRS WEEK\WEEK10\experiments\scenarioC_cnn_schemeB"
+OUT_DIR = r"E:\experiments\scenarioC_cnn_schemeB"
 os.makedirs(OUT_DIR, exist_ok=True)
 
-# 训练参数
+# Training Parameters
 MAX_EPOCHS = 20
 BATCH_TRAIN = 64
 BATCH_EVAL  = 256
@@ -93,7 +93,7 @@ def save_bar_charts(out_dir: str, metrics: dict):
     def _safe_num(x):
         return (np.nan, True) if x is None else (float(x), False)
 
-    # 分类指标图
+    # Classification Metrics Chart
     cls_names = ["Accuracy", "Precision", "Recall", "F1", "ROC-AUC"]
     cls_vals_raw = [metrics["accuracy"], metrics["precision"], metrics["recall"], metrics["f1"], metrics["roc_auc"]]
     cls_vals, cls_na = zip(*[_safe_num(v) for v in cls_vals_raw])
@@ -110,7 +110,7 @@ def save_bar_charts(out_dir: str, metrics: dict):
             plt.text(b.get_x()+b.get_width()/2, h+0.02, f"{v:.3f}", ha="center", va="bottom", fontsize=9)
     plt.tight_layout(); plt.savefig(os.path.join(out_dir, "metrics_bar_classification.png"), dpi=160); plt.close()
 
-    # 计算指标图
+    # Calculated Metrics Chart
     comp_names = ["Train Time (s)", "Avg Inference (ms)", "Peak GPU (MB)", "RSS Δ (MB)"]
     rss_delta = metrics["rss_mb_after"] - metrics["rss_mb_before"]
     gpu_peak_mb = metrics["gpu_peak_mb"] if metrics["gpu_peak_mb"] is not None else 0.0
@@ -171,8 +171,8 @@ def _detect_label(df: pd.DataFrame) -> str:
 
 def harmonize_xlsx(path: str) -> pd.DataFrame:
     """
-    读取 xlsx，语义归一 -> 数值特征 + label（列名为规范名）;
-    自动派生: packet_count, bytes_total, pkt_size_mean.
+    Read XLSX file, perform semantic normalization -> Numerical Features + Label (column names standardized);
+    Automatically derived features: packet_count, bytes_total, pkt_size_mean.
     """
     raw = pd.read_excel(path)
     raw_cols = list(raw.columns)
@@ -181,13 +181,13 @@ def harmonize_xlsx(path: str) -> pd.DataFrame:
 
     lab = _detect_label(df)
 
-    # 应用同义词到规范名
+    # Apply Synonyms to Canonical Names
     mapped = []
     for c in df.columns:
         mapped.append("label" if c == lab else _canon(c))
     df.columns = mapped
 
-    # ====== 自动派生，扩大交集 ======
+    # ====== Automatic Derivation, Expanding the Intersection ======
     # packet_count
     if set(["subflow_fwd_packets","subflow_bwd_packets"]).issubset(df.columns):
         df["packet_count"] = pd.to_numeric(df["subflow_fwd_packets"], errors="coerce").fillna(0) + \
@@ -198,20 +198,20 @@ def harmonize_xlsx(path: str) -> pd.DataFrame:
         df["bytes_total"] = pd.to_numeric(df["subflow_fwd_bytes"], errors="coerce").fillna(0) + \
                             pd.to_numeric(df["subflow_bwd_bytes"], errors="coerce").fillna(0)
 
-    # pkt_size_mean（有了 bytes_total 和 packet_count 才能派生）
+    # pkt_size_mean（`bytes_total` and `packet_count` are required to derive this value.）
     if "bytes_total" in df.columns and "packet_count" in df.columns:
         pc = pd.to_numeric(df.get("packet_count"), errors="coerce").fillna(0)
         bt = pd.to_numeric(df.get("bytes_total"), errors="coerce").fillna(0.0)
         df["pkt_size_mean"] = (bt / pc.replace(0, np.nan)).fillna(0.0)
 
-    # ====== 丢弃明显非特征列 ======
+    # ====== Discard obviously non-feature columns ======
     drop = {_norm(x) for x in NON_FEATURE_DROP}
     feat_cols = [c for c in df.columns if c not in drop and c != "label"]
 
-    # 仅保留数值型
+    # Retain only numeric values.
     df_feat = df[feat_cols].apply(pd.to_numeric, errors="coerce").fillna(0.0)
 
-    # 标签二值化（如需多分类自行替换）
+    # Label Binarization (Replace as needed for multi-class classification)
     y = df["label"].astype(str).str.lower().map(lambda s: 0 if s in {"benign","normal","non-encrypted"} else 1)
     df_feat["label"] = y.astype(int)
     return df_feat
@@ -236,13 +236,13 @@ def main():
     df3 = harmonize_xlsx(DS3_XLSX)
     df4 = harmonize_xlsx(DS4_XLSX)
 
-    # 2) 共同字段交集（去掉 label）
+    # 2) Intersection of Common Fields (Excluding Labels)
     inter_feats = list(set(df1.columns) & set(df3.columns) & set(df4.columns))
     inter_feats = [c for c in inter_feats if c != "label"]
     if not inter_feats:
         raise ValueError("No common features across the three XLSX datasets after harmonization+derivation.")
 
-    # 3) 在交集里按优先级挑选 K 个；若不足 K，自动降级
+    # 3) Select K items from the intersection based on priority; if fewer than K are available, automatically fall back.
     feats_sorted = [f for f in FEATURE_PRIORITY if f in inter_feats]
     extras = [f for f in sorted(inter_feats) if f not in feats_sorted]
     feats_sorted.extend(extras)
@@ -252,7 +252,7 @@ def main():
     use_feats = feats_sorted[:K_actual]
     print(f"[INFO] Common features selected (K_actual={K_actual}): {use_feats}")
 
-    # 4) 用三者合并的表拟合统一 StandardScaler，再各自构建图像
+    # 4) Fit a unified StandardScaler to the merged table of the three entities, and then construct the respective visualizations.
     Xtab_all = np.vstack([
         df1[use_feats].astype(np.float32).values,
         df3[use_feats].astype(np.float32).values,
@@ -264,7 +264,7 @@ def main():
     X3, y3, _ = build_images_from_df(df3, use_feats, scaler=scaler)
     X4, y4, _ = build_images_from_df(df4, use_feats, scaler=scaler)
 
-    # 5) 多域合并 -> Stratified split (70/15/15)
+    # 5) Multi-Domain Merging -> Stratified split (70/15/15)
     X_all = np.concatenate([X1, X3, X4], axis=0)
     y_all = np.concatenate([y1, y3, y4], axis=0)
 
@@ -275,7 +275,7 @@ def main():
         X_temp, y_temp, test_size=0.50, random_state=SEED, stratify=y_temp
     )
 
-    # 6) 训练 CNN（早停）
+    # 6) Training a CNN 
     device = get_device()
     Xtr_t, ytr_t = to_nchw(X_train, y_train, device)
     Xva_t, yva_t = to_nchw(X_val,   y_val,   device)
@@ -336,7 +336,7 @@ def main():
     model.load_state_dict(best_state)
     torch.save(model.state_dict(), os.path.join(OUT_DIR, "best_model.pt"))
 
-    # 7) 测试 + 评估
+    # 7) Testing + Assessment
     model.eval(); probs=[]; preds=[]; labels=[]
     t1 = time.perf_counter()
     with torch.no_grad():
@@ -356,7 +356,7 @@ def main():
     preds = np.concatenate(preds)
     labels = np.concatenate(labels)
 
-    # 二分类默认；若多类请改 average="macro" 或 "weighted"
+    # Default for binary classification; for multi-class classification, please change `average` to "macro" or "weighted".
     acc = accuracy_score(labels, preds)
     prec, rec, f1, _ = precision_recall_fscore_support(labels, preds, average="binary", zero_division=0)
 
@@ -397,7 +397,7 @@ def main():
         json.dump(metrics, f, indent=2)
     print(json.dumps(metrics, indent=2))
 
-    # 条形图
+    # Bar Chart
     save_bar_charts(OUT_DIR, metrics)
     print(f"[DONE] Artifacts saved to: {OUT_DIR}")
 
