@@ -1,13 +1,13 @@
 #Dataset3 TII
 # -*- coding: utf-8 -*-
-# 路径改为 ds3；其余与 ds1 基本一致
+# The path has been changed to `ds3`; otherwise, it remains largely identical to `ds1`.
 import os, json, time, psutil, numpy as np, torch, matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, roc_auc_score, confusion_matrix, roc_curve
 from torch import nn
 from torch.utils.data import TensorDataset, DataLoader
 
-IN_PATH = "E:/USA/AIRS/AIRS WEEK/WEEK10/cnn_images/ds3/images.npz"   # ← 改成你的路径
+IN_PATH = "E:/cnn_images/ds3/images.npz"   # ← Change this to your path.
 OUT_DIR  = "./cnn_images/ds3/artifacts"
 os.makedirs(OUT_DIR, exist_ok=True)
 
@@ -42,7 +42,7 @@ def rss_mb():
 data = np.load(IN_PATH)
 X, y = data["X_images"], data["y"]   # X: (N, H, W, C)
 
-# 分层划分
+# Hierarchical Division
 X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=0.30, random_state=42, stratify=y)
 X_val,   X_test, y_val, y_test   = train_test_split(X_temp, y_temp, test_size=0.50, random_state=42, stratify=y_temp)
 
@@ -51,22 +51,22 @@ Xtr, ytr = to_torch_NCHW(X_train, y_train, device)   # -> (N, C, H, W)
 Xva, yva = to_torch_NCHW(X_val,   y_val,   device)
 Xte, yte = to_torch_NCHW(X_test,  y_test,  device)
 
-# >>> 自动获取通道数 C 与类别数 num_classes
+# >>> Automatically retrieve the number of channels C and the number of classes. num_classes
 C = int(Xtr.shape[1])                    # e.g., 4
-num_classes = int(ytr.max().item()) + 1  # 假设标签从 0 开始
+num_classes = int(ytr.max().item()) + 1  # Assume labels start from 0.
 
 train_loader = DataLoader(TensorDataset(Xtr, ytr), batch_size=64, shuffle=True)
 val_loader   = DataLoader(TensorDataset(Xva, yva), batch_size=256)
 test_loader  = DataLoader(TensorDataset(Xte, yte), batch_size=256)
 
-# 类别权重（可缓解不平衡）
+# Class Weights (Can Mitigate Imbalance)
 classes, counts = np.unique(y_train, return_counts=True)
 y_train_t = torch.tensor(y_train, dtype=torch.long, device=device)
 class_counts = torch.bincount(y_train_t, minlength=num_classes)
 class_weights = (class_counts.max().float() / class_counts.clamp_min(1).float()).to(device)
 
 # ---------------- Model & Optim ----------------
-model = SmallCNN(in_ch=C, n_classes=num_classes).to(device)   # <<< 关键修改：in_ch = C
+model = SmallCNN(in_ch=C, n_classes=num_classes).to(device)   # <<< Key Modifications：in_ch = C
 criterion = nn.CrossEntropyLoss(weight=class_weights)
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
@@ -107,7 +107,7 @@ train_time = time.perf_counter() - t0
 after = rss_mb()
 gpu_peak = torch.cuda.max_memory_allocated()/(1024**2) if device.type == "cuda" else None
 
-# 恢复最优
+# Restore to Optimal
 model.load_state_dict(best_state)
 torch.save(model.state_dict(), os.path.join(OUT_DIR, "best_model.pt"))
 
@@ -121,7 +121,7 @@ with torch.no_grad():
         pr = torch.argmax(lg, dim=1).detach().cpu().numpy()
         preds.append(pr)
         labels.append(yb.detach().cpu().numpy())
-        # 概率（用于 ROC-AUC，若二分类）
+        # Probabilities (for ROC-AUC, if binary classification)
         if lg.shape[1] >= 2:
             pb = torch.softmax(lg, dim=1)[:, 1].detach().cpu().numpy()
         else:
@@ -138,7 +138,7 @@ prec, rec, f1, _ = precision_recall_fscore_support(labels, preds, average="binar
 
 roc = None
 try:
-    # 只有二分类且概率有效时才计算 ROC-AUC
+    # ROC-AUC is calculated only when there are exactly two classes and the probabilities are valid.
     if len(np.unique(labels)) == 2 and np.any(probs):
         roc = roc_auc_score(labels, probs)
         fpr, tpr, _ = roc_curve(labels, probs)
@@ -172,12 +172,12 @@ with open(os.path.join(OUT_DIR, "metrics.json"), "w") as f:
     json.dump(metrics, f, indent=2)
 print(json.dumps(metrics, indent=2))
 
-# ---------- NEW: 条形图可视化 ----------
+# ---------- NEW: Bar Chart Visualization ----------
 def _safe_num(x):
-    # 将 None 转为 np.nan 以便绘图；返回数值和是否为N/A标记
+    # Converts `None` to `np.nan` for plotting purposes; returns the numerical value and an N/A flag.
     return (np.nan, True) if x is None else (float(x), False)
 
-# 1) 分类指标条形图
+# 1) Categorical Metric Bar Chart
 cls_names = ["Accuracy", "Precision", "Recall", "F1", "ROC-AUC"]
 cls_vals_raw = [metrics["accuracy"], metrics["precision"], metrics["recall"], metrics["f1"], metrics["roc_auc"]]
 cls_vals, cls_na = zip(*[_safe_num(v) for v in cls_vals_raw])
@@ -188,7 +188,7 @@ plt.ylim(0, 1.05)
 plt.ylabel("Score")
 plt.title("Classification Metrics")
 
-# 在柱上标注数值；N/A 用灰色文字
+# Annotate values ​​on the columns; use gray text for N/A.
 for b, v, na in zip(bars, cls_vals, cls_na):
     h = b.get_height()
     if na:
@@ -201,9 +201,9 @@ plt.tight_layout()
 plt.savefig(os.path.join(OUT_DIR, "A_metrics_bar_classification.png"), dpi=160)
 plt.close()
 
-# 2) 计算指标条形图
+# 2) Calculated Metrics Bar Chart
 comp_names = ["Train Time (s)", "Avg Inference (ms)", "Peak GPU (MB)", "RSS Δ (MB)"]
-# 计算 RSS 变化（after - before），可能为负（释放内存）
+# Calculate the change in RSS (after - before); this may be negative (indicating memory release).
 rss_delta = metrics["rss_mb_after"] - metrics["rss_mb_before"]
 gpu_peak_mb = metrics["gpu_peak_mb"] if metrics["gpu_peak_mb"] is not None else 0.0
 comp_vals = [metrics["train_time_sec"], metrics["inference_avg_ms_per_sample"], gpu_peak_mb, rss_delta]
@@ -213,7 +213,7 @@ bars = plt.bar(comp_names, comp_vals)
 plt.ylabel("Value")
 plt.title("Computation Metrics")
 
-# 标注数值
+# Annotate Values
 for b, v in zip(bars, comp_vals):
     plt.text(b.get_x()+b.get_width()/2, b.get_height(),
              f"{v:.2f}", ha="center", va="bottom", fontsize=9)
