@@ -31,20 +31,20 @@ from torch.utils.data import TensorDataset, DataLoader
 # =========================
 #        CONFIG
 # =========================
-# 已生成的 .npz（优先用；若与模板不一致则回退到 parquet 重建）
-DS1_NPZ = r"E:/USA/AIRS/AIRS WEEK/WEEK10/cnn_images/ds1/images.npz"
-DS3_NPZ = r"E:/USA/AIRS/AIRS WEEK/WEEK10/cnn_images/ds3/images.npz"
-DS4_NPZ = r"E:/USA/AIRS/AIRS WEEK/WEEK10/cnn_images/ds4/images.npz"
+# Pre-generated .npz (preferred; if inconsistent with the template, falls back to Parquet for reconstruction)
+DS1_NPZ = r"E:/cnn_images/ds1/images.npz"
+DS3_NPZ = r"E:/cnn_images/ds3/images.npz"
+DS4_NPZ = r"E:/cnn_images/ds4/images.npz"
 
-# harmonized parquet（用于模板选择与必要时重建）
-DS1_PARQUET = r"E:/USA/AIRS/AIRS WEEK/WEEK10/harmonized/scenario_b/Network_dataset_1_harmonized.parquet"
-DS3_PARQUET = r"E:/USA/AIRS/AIRS WEEK/WEEK10/harmonized/scenario_b/matched_columns_file_TII_B_harmonized.parquet"
-DS4_PARQUET = r"E:/USA/AIRS/AIRS WEEK/WEEK10/harmonized/scenario_b/matched_columns_file_BCCC_B_harmonized.parquet"
+# harmonized parquet（For template selection and, when necessary, reconstruction.）
+DS1_PARQUET = r"E:/harmonized/scenario_b/Network_dataset_1_harmonized.parquet"
+DS3_PARQUET = r"E:/harmonized/scenario_b/matched_columns_file_TII_B_harmonized.parquet"
+DS4_PARQUET = r"E:/harmonized/scenario_b/matched_columns_file_BCCC_B_harmonized.parquet"
 
-# 希望的字段数（不足则自动从 5 降到 1）
+# Desired number of fields (automatically reduced from 5 to 1 if insufficient)
 K_TARGET = 5
 
-# 优先级与回退字段
+# Priority and Fallback Fields
 FEATURE_PRIORITY = [
     "duration","bytes_total","packet_count",
     "pkt_size_mean","pkt_size_std",
@@ -53,10 +53,10 @@ FEATURE_PRIORITY = [
 ]
 SAFE_BACKUPS = ["src_port", "dst_port", "protocol"]
 
-# 标签设置
-FORCE_BINARY = True   # True: 把 Benign/Normal/Background 归为 0，其余为 1；False：多类编码
+# Tag Settings
+FORCE_BINARY = True   # True: Classify Benign/Normal/Background as 0, and the rest as 1; False: Multi-class encoding.
 
-# 训练参数与输出
+# Training Parameters and Output
 MAX_EPOCHS = 20
 BATCH_TRAIN = 64
 BATCH_EVAL  = 256
@@ -64,7 +64,7 @@ LR = 1e-3
 EARLY_STOP_PATIENCE = 5
 SEED = 42
 
-OUT_DIR = r"E:/USA/AIRS/AIRS WEEK/WEEK10/experiments/scenarioB_cnn_fixed_labels"
+OUT_DIR = r"E:/experiments/scenarioB_cnn_fixed_labels"
 os.makedirs(OUT_DIR, exist_ok=True)
 
 # =========================
@@ -100,7 +100,7 @@ class SmallCNN(nn.Module):
 
 def save_bar_charts(out_dir: str, metrics: dict):
     def _safe_num(x): return (np.nan, True) if x is None else (float(x), False)
-    # 分类
+    # Classification
     cls_names = ["Accuracy","Precision","Recall","F1","ROC-AUC"]
     cls_vals_raw = [metrics["accuracy"], metrics["precision"], metrics["recall"], metrics["f1"], metrics["roc_auc"]]
     cls_vals, cls_na = zip(*[_safe_num(v) for v in cls_vals_raw])
@@ -115,7 +115,7 @@ def save_bar_charts(out_dir: str, metrics: dict):
         else:
             plt.text(b.get_x()+b.get_width()/2, h+0.02, f"{v:.3f}", ha="center", va="bottom", fontsize=9)
     plt.tight_layout(); plt.savefig(os.path.join(out_dir,"B_metrics_bar_classification.png"), dpi=160); plt.close()
-    # 计算
+    # calculate
     comp_names = ["Train Time (s)", "Avg Inference (ms)", "Peak GPU (MB)", "RSS Δ (MB)"]
     rss_delta = metrics["rss_mb_after"] - metrics["rss_mb_before"]
     gpu_peak_mb = metrics["gpu_peak_mb"] if metrics["gpu_peak_mb"] is not None else 0.0
@@ -133,7 +133,7 @@ def save_bar_charts(out_dir: str, metrics: dict):
 def _num(x): return pd.to_numeric(x, errors="coerce")
 
 def derive_standard_features(df: pd.DataFrame) -> pd.DataFrame:
-    """派生统一特征；数值化 protocol/src_port/dst_port。"""
+    """Derive Unified Features; Quantization protocol/src_port/dst_port。"""
     d = df.copy()
 
     # ---- bytes_total ----
@@ -238,17 +238,17 @@ def find_label_column(df: pd.DataFrame) -> Optional[str]:
 
 def encode_labels(series: pd.Series, force_binary: bool=True) -> Tuple[np.ndarray, dict, bool]:
     """
-    将标签列编码为整数。
+    Encode the label column as integers.
     - force_binary=True: benign-like -> 0, others (non-empty) -> 1
     - force_binary=False: multi-class LabelEncoder (0..K-1)
-    返回：y(np.int64), mapping(dict: original->encoded), is_binary(bool)
+    return：y(np.int64), mapping(dict: original->encoded), is_binary(bool)
     """
-    # 若本身是数值，直接返回
+    # If the value is already a number, return it directly.
     if np.issubdtype(series.dtype, np.number):
         y = series.to_numpy().astype(np.int64)
         unique = np.unique(y)
         is_bin = (len(unique) == 2)
-        mapping = {}  # 数值不需要映射
+        mapping = {}  # Numerical values ​​do not require mapping.
         return y, mapping, is_bin
 
     s = series.astype(str).fillna("").str.strip()
@@ -264,7 +264,7 @@ def encode_labels(series: pd.Series, force_binary: bool=True) -> Tuple[np.ndarra
         is_bin = (len(le.classes_) == 2)
         return y, mapping, is_bin
 
-# ---------- 全局模板选择 ----------
+# ---------- Global Template Selection ----------
 def choose_global_template(train_df: pd.DataFrame,
                            val_df: pd.DataFrame,
                            test_df: pd.DataFrame,
@@ -282,7 +282,7 @@ def choose_global_template(train_df: pd.DataFrame,
             if b in dfs[0].columns and b not in cand:
                 cand.append(b)
     if len(cand) == 0:
-        raise ValueError("训练集没有可用字段（优先级+回退均不可用）。")
+        raise ValueError("No fields are available in the training set (neither priority nor fallback fields are available).")
 
     for k in [K_target, 5, 4, 3, 2, 1]:
         k = min(k, len(cand))
@@ -294,7 +294,7 @@ def choose_global_template(train_df: pd.DataFrame,
             avail = set(df.columns) & pool
             inter = avail if inter is None else (inter & avail)
         if len(inter) == 0:
-            notes.append(f"k={k} 时三方公共可用集合为空")
+            notes.append(f"k={k} At this time, the tripartite publicly available set is empty.")
             continue
 
         final=[]
@@ -306,22 +306,22 @@ def choose_global_template(train_df: pd.DataFrame,
         if len(final) >= 1:
             return final[:k], k, notes
 
-    raise ValueError("无法在三份数据中达到至少 1 个共同可用字段。")
+    raise ValueError("Unable to find at least one common available field across the three data sets.")
 
-# ---------- 构图（用模板 feats） ----------
+# ---------- Composition (Using Templates: Feats) ----------
 def build_outer_images(df: pd.DataFrame, feats: List[str], scaler: Optional[StandardScaler]=None, force_binary: bool=True):
     df = derive_standard_features(df)
 
-    # 找 label 列并编码
+    # Locate the 'label' column and encode it.
     label_col = find_label_column(df)
     if label_col is None:
-        raise ValueError("未找到标签列（尝试的候选: {}）".format(", ".join(LABEL_CANDIDATES)))
+        raise ValueError("No label column found (candidates to try: {}）".format(", ".join(LABEL_CANDIDATES)))
     y, label_map, is_binary = encode_labels(df[label_col], force_binary=force_binary)
 
-    # 检查特征并构图
+    # Examine the features and compose the shot.
     for f in feats:
         if f not in df.columns:
-            raise ValueError(f"字段 {f} 缺失，无法构图（请检查派生/模板选择）。")
+            raise ValueError(f"Field {f} is missing; composition is not possible (please check the derivation/template selection).")
     X_tab = df[feats].apply(pd.to_numeric, errors="coerce").fillna(0.0).to_numpy(dtype=np.float32)
 
     if scaler is None:
@@ -343,15 +343,14 @@ def main():
     set_seed(SEED)
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    # 读 parquet 用于模板选择与（必要时）重建
+    # Reading Parquet for template selection and (where necessary) reconstruction.
     if not (os.path.exists(DS3_PARQUET) and os.path.exists(DS4_PARQUET) and os.path.exists(DS1_PARQUET)):
-        raise FileNotFoundError("请确认三份 harmonized parquet 均存在。")
+        raise FileNotFoundError("Please confirm that all three Harmonized Parquet files exist.")
 
     df_tr_raw = pd.read_parquet(DS3_PARQUET)
     df_va_raw = pd.read_parquet(DS4_PARQUET)
     df_te_raw = pd.read_parquet(DS1_PARQUET)
-
-    # 全局模板选择（一次看三份数据）
+# Global Template Selection (View Three Sets of Data Simultaneously)
     feats_template, k_final, notes = choose_global_template(
         df_tr_raw, df_va_raw, df_te_raw,
         K_target=K_TARGET, priority=FEATURE_PRIORITY, backups=SAFE_BACKUPS
@@ -365,16 +364,16 @@ def main():
     # ---- Train ----
     if os.path.exists(DS3_NPZ):
         Xtr_npz, ytr_npz, feats_npz = load_npz(DS3_NPZ)
-        # 即使用 npz，也需要知道标签二/多类；因此从 parquet 取标签重新编码（保证一致性）
+        # Even when using NPZ files, the binary or multi-class labels are still required; therefore, the labels are retrieved from the Parquet files and re-encoded to ensure consistency.
         Xtr, ytr, scaler, label_col_tr, label_map_tr, is_bin_tr = build_outer_images(
             df_tr_raw, feats_template, scaler=None, force_binary=FORCE_BINARY
         )
         if feats_npz == feats_template:
-            # 用 npz 的 X，以 parquet 的 y（编码后）
+            # Use the X data from the NPZ file, and the y data (encoded) from the Parquet file.
             if Xtr_npz.shape[0] == Xtr.shape[0]:
                 Xtr = Xtr_npz
             else:
-                print("[WARN] ds3 npz 与 parquet 行数不同，改用 parquet 构图的 X。")
+                print("[WARN] The row counts for ds3.npz and the Parquet file differ; switching to the Parquet-derived X for graph construction.")
         print(f"[train] X:{Xtr.shape}, y:{ytr.shape}, label_col:{label_col_tr}, binary:{is_bin_tr}, map:{label_map_tr}")
     else:
         Xtr, ytr, scaler, label_col_tr, label_map_tr, is_bin_tr = build_outer_images(
@@ -389,7 +388,7 @@ def main():
             df_va_raw, feats_template, scaler=scaler, force_binary=FORCE_BINARY
         )
         if feats_npz == feats_template and Xva_npz.shape[0] == Xva.shape[0]:
-            Xva = Xva_npz  # 使用 npz 的 X，但 y 统一用 parquet 编码后的
+            Xva = Xva_npz  # X is represented using npz, but y is uniformly encoded using parquet.
         print(f"[val]   X:{Xva.shape}, y:{yva.shape}, label_col:{label_col_va}, binary:{is_bin_va}, map:{label_map_va}")
     else:
         Xva, yva, _, label_col_va, label_map_va, is_bin_va = build_outer_images(
@@ -426,7 +425,7 @@ def main():
     val_loader   = DataLoader(TensorDataset(Xva_t, yva_t), batch_size=BATCH_EVAL)
     test_loader  = DataLoader(TensorDataset(Xte_t, yte_t), batch_size=BATCH_EVAL)
 
-    # 类别权重（训练集）
+    # Class Weights (Training Set)
     classes, counts = np.unique(ytr, return_counts=True)
     weights = torch.ones(int(classes.max()+1), device=device, dtype=torch.float32)
     weights[classes] = torch.tensor((counts.max()/counts), device=device, dtype=torch.float32)
@@ -471,7 +470,7 @@ def main():
     after = rss_mb()
     gpu_peak = torch.cuda.max_memory_allocated()/(1024**2) if device.type == "cuda" else None
 
-    # 恢复最佳并保存
+    # Restore to Best and Save
     model.load_state_dict(best_state)
     torch.save(model.state_dict(), os.path.join(OUT_DIR, "best_model.pt"))
 
@@ -494,7 +493,7 @@ def main():
     preds  = np.concatenate(preds)
     labels = np.concatenate(labels)
 
-    # 指标（默认二分类；若你设置 FORCE_BINARY=False 则这里建议改 average="macro"）
+    # Metrics (Default: Binary classification; if you set `FORCE_BINARY=False`, it is recommended to change `average` to `"macro"` here.)
     average_mode = "binary" if FORCE_BINARY else "macro"
     acc = accuracy_score(labels, preds)
     prec, rec, f1, _ = precision_recall_fscore_support(labels, preds, average=average_mode, zero_division=0)
@@ -536,7 +535,7 @@ def main():
         json.dump(metrics, f, indent=2)
     print(json.dumps(metrics, indent=2))
 
-    # 条形图
+    # Bar Chart
     save_bar_charts(OUT_DIR, metrics)
     print(f"[DONE] Artifacts saved to: {OUT_DIR}")
 
