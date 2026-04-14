@@ -154,7 +154,7 @@ print("DS1 OK:", OUT_DIR, "shape:", imgs.shape)
 import os, re, numpy as np, pandas as pd, pickle
 from sklearn.preprocessing import StandardScaler
 
-IN_PATH = "E:/USA/AIRS/AIRS WEEK/WEEK10/VPN_email_classified.xlsx"   # ← Change this to your path.
+IN_PATH = ""   # ← Change this to your path.
 OUT_DIR = "./cnn_images/ds2"
 K = 5
 MODE = "multi"          # "outer" or "multi"
@@ -374,7 +374,7 @@ print("DS3 OK:", OUT_DIR, "shape:", imgs.shape)
 import os, re, numpy as np, pandas as pd, pickle
 from sklearn.preprocessing import StandardScaler
 
-IN_PATH = "E:/USA/AIRS/AIRS WEEK/WEEK10/matched_columns_file_BCCC_B.xlsx"   # ← Change this to your path.
+IN_PATH = ""   # ← Change this to your path.
 OUT_DIR = "./cnn_images/ds4"
 K = 5
 MODE = "multi"    # "outer" or "multi"
